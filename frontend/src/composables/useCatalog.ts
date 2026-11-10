@@ -1,16 +1,18 @@
-import type { ClientKey } from '../types'
+import type { Ref } from 'vue'
+import type { ClientKey, Preferences } from '../types'
 import { computed, onMounted, onScopeDispose, shallowRef, watch } from 'vue'
 import { listKeys, listModels } from '../api/modules/lab'
 
-export function useCatalog() {
+export function useCatalog(draft: Ref<Preferences>, ready: Readonly<Ref<boolean>>) {
   const keys = shallowRef<ClientKey[]>([])
   const models = shallowRef<string[]>([])
-  const clientKeyId = shallowRef('')
-  const modelId = shallowRef('')
+  const keysLoaded = shallowRef(false)
   const keysLoading = shallowRef(false)
   const modelsLoading = shallowRef(false)
   const keysError = shallowRef('')
   const modelsError = shallowRef('')
+  const keyNotice = shallowRef('')
+  const modelNotice = shallowRef('')
   let active = true
   onScopeDispose(() => {
     active = false
@@ -23,11 +25,10 @@ export function useCatalog() {
     keysError.value = ''
     try {
       const result = await listKeys()
-      if (!active)
-        return
-      keys.value = result
-      if (!result.some(key => key.enabled && key.id === clientKeyId.value))
-        clientKeyId.value = result.find(key => key.enabled)?.id ?? ''
+      if (active) {
+        keys.value = result
+        keysLoaded.value = true
+      }
     }
     catch (cause) {
       if (active)
@@ -39,23 +40,48 @@ export function useCatalog() {
     }
   }
 
-  watch(clientKeyId, async (id, _old, cleanup) => {
+  watch([ready, keysLoaded, keys], ([isReady, loaded], [wasReady, wasLoaded]) => {
+    if (!isReady || !loaded)
+      return
+    const selected = draft.value.clientKeyId
+    if (selected && !keys.value.some(key => key.enabled && key.id === selected)) {
+      draft.value.clientKeyId = ''
+      draft.value.modelId = ''
+      keyNotice.value = '已选 Key 不可用，请重新选择'
+    }
+    else if (!selected && (!wasReady || !wasLoaded)) {
+      draft.value.clientKeyId = keys.value.find(key => key.enabled)?.id ?? ''
+    }
+  })
+
+  watch([ready, keysLoaded, () => draft.value.clientKeyId, keys], async (_next, _previous, cleanup) => {
     let current = true
     cleanup(() => {
       current = false
     })
-    const previous = modelId.value
-    models.value = []
-    modelId.value = ''
-    modelsError.value = ''
-    modelsLoading.value = Boolean(id)
-    if (!id)
+    modelsLoading.value = false
+    if (!ready.value || !keysLoaded.value)
       return
+    const id = draft.value.clientKeyId
+    const desired = draft.value.modelId
+    models.value = []
+    draft.value.modelId = ''
+    modelsError.value = ''
+    modelNotice.value = ''
+    if (!keys.value.some(key => key.enabled && key.id === id))
+      return
+    keyNotice.value = ''
+    modelsLoading.value = true
     try {
       const result = await listModels(id)
-      if (current) {
-        models.value = result
-        modelId.value = result.includes(previous) ? previous : result[0] ?? ''
+      if (!current)
+        return
+      models.value = result
+      if (desired && !result.includes(desired)) {
+        modelNotice.value = '已选模型不可用，请重新选择'
+      }
+      else {
+        draft.value.modelId = desired || result[0] || ''
       }
     }
     catch (cause) {
@@ -67,14 +93,14 @@ export function useCatalog() {
         modelsLoading.value = false
     }
   })
+
   onMounted(refresh)
   return {
-    clientKeyId,
-    modelId,
     keysLoading,
     modelsLoading,
     refresh,
     error: computed(() => keysError.value || modelsError.value),
+    notice: computed(() => keyNotice.value || (draft.value.modelId ? '' : modelNotice.value)),
     keyOptions: computed(() => keys.value.map(key => ({ label: key.name, value: key.id, disabled: !key.enabled }))),
     modelOptions: computed(() => models.value.map(model => ({ label: model, value: model }))),
   }

@@ -1,6 +1,7 @@
 //! 启动对话实验室的管理扩展会话
 
 mod management;
+mod preferences;
 mod presets;
 
 use gateway_plugin_sdk::{

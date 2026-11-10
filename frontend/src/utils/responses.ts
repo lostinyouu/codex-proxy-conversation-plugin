@@ -1,4 +1,4 @@
-export interface ModelResult { text: string, responseId: string | null, model: string | null, inputTokens: number | null, outputTokens: number | null, totalTokens: number | null }
+export interface ModelResult { text: string, output: Record<string, unknown>[], responseId: string | null, model: string | null, inputTokens: number | null, outputTokens: number | null, totalTokens: number | null }
 interface ConsumeOptions { onDelta: (delta: string) => void }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -45,10 +45,13 @@ function outputText(value: Record<string, unknown>): string {
   return parts.join('')
 }
 
-function resultFromResponse(value: Record<string, unknown>, streamedText: string): ModelResult {
+function resultFromResponse(value: Record<string, unknown>, streamedText: string, outputItems: Map<number, Record<string, unknown>>): ModelResult {
   const usage = isRecord(value.usage) ? value.usage : {}
+  if (!Array.isArray(value.output) || !value.output.every(isRecord))
+    throw new Error('模型返回的输出项格式无效')
   return {
     text: streamedText || outputText(value),
+    output: value.output.map((item, index) => outputItems.get(index) ?? item),
     responseId: typeof value.id === 'string' ? value.id : null,
     model: typeof value.model === 'string' ? value.model : null,
     inputTokens: nullableNumber(usage.input_tokens),
@@ -83,13 +86,17 @@ function eventData(block: string): string | null {
 
 export async function consumeModelResponse(response: Response, options: ConsumeOptions): Promise<ModelResult> {
   let streamedText = ''
+  const outputItems = new Map<number, Record<string, unknown>>()
   const value = await consumeResponseDocument(response, {
     onTextDelta(delta) {
       streamedText += delta
       options.onDelta(delta)
     },
+    onOutputItem(index, item) {
+      outputItems.set(index, item)
+    },
   })
-  const result = resultFromResponse(value, streamedText)
+  const result = resultFromResponse(value, streamedText, outputItems)
   if (!streamedText && result.text)
     options.onDelta(result.text)
   return result
@@ -98,6 +105,7 @@ export async function consumeModelResponse(response: Response, options: ConsumeO
 // 复用 Responses 的终态校验与取消清理，防止把截断流当成成功
 async function consumeResponseDocument(response: Response, options: {
   onTextDelta?: (delta: string) => void
+  onOutputItem?: (index: number, item: Record<string, unknown>) => void
 } = {}): Promise<Record<string, unknown>> {
   if (!response.ok)
     throw await responseError(response)
@@ -140,6 +148,12 @@ async function consumeResponseDocument(response: Response, options: {
     }
     if (event.type === 'response.completed') {
       completed = event.response
+      return
+    }
+    if (event.type === 'response.output_item.done') {
+      if (!Number.isInteger(event.output_index) || Number(event.output_index) < 0 || !isRecord(event.item))
+        throw new Error('模型返回了无效的输出项')
+      options.onOutputItem?.(Number(event.output_index), event.item)
       return
     }
     if (event.type === 'response.failed' || event.type === 'response.incomplete' || event.type === 'error')

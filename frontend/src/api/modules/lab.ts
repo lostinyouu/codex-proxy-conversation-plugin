@@ -1,4 +1,4 @@
-import type { ClientKey, Presets, SavedPresets } from '../../types'
+import type { ClientKey, Preferences, Presets, SavedPreferences, SavedPresets } from '../../types'
 import request from '../request'
 
 export async function listKeys(): Promise<ClientKey[]> {
@@ -35,6 +35,21 @@ export function getPresets(): Promise<SavedPresets> {
 export function savePresets(value: Presets, expectedVersion: number | null): Promise<{ version: number }> {
   return request({
     url: 'api/presets',
+    method: 'POST',
+    data: { value, expectedVersion },
+  })
+}
+
+export function getPreferences(): Promise<SavedPreferences> {
+  return request({
+    url: 'api/preferences',
+    method: 'GET',
+  })
+}
+
+export function savePreferences(value: Preferences, expectedVersion: number | null): Promise<{ version: number }> {
+  return request({
+    url: 'api/preferences',
     method: 'POST',
     data: { value, expectedVersion },
   })

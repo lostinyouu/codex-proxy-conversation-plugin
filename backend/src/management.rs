@@ -1,6 +1,6 @@
-//! 提供 Key、模型目录与带版本校验的预设存取接口
+//! 提供 Key、模型目录与带版本校验的预设及默认设置接口
 
-use crate::presets::Presets;
+use crate::{preferences::Preferences, presets::Presets};
 use gateway_plugin_sdk::{
     ErrorCode, PluginFault,
     call::{
@@ -21,6 +21,8 @@ use serde_json::{Value, json};
 const JSON: &str = "application/json";
 const NAMESPACE: &str = "presets";
 const KEY: &str = "collection";
+const PREFERENCES_NAMESPACE: &str = "preferences";
+const PREFERENCES_KEY: &str = "defaults";
 
 pub(crate) fn registration() -> ManagementRegistration {
     ManagementRegistration {
@@ -29,6 +31,8 @@ pub(crate) fn registration() -> ManagementRegistration {
             ("POST", "api/models"),
             ("GET", "api/presets"),
             ("POST", "api/presets"),
+            ("GET", "api/preferences"),
+            ("POST", "api/preferences"),
         ]
         .into_iter()
         .map(|(method, path)| ManagementRoute {
@@ -81,7 +85,7 @@ impl From<PluginFault> for ApiError {
             Self(
                 409,
                 "conflict",
-                "预设已在其他页面更新，请重新载入后再保存".into(),
+                "保存内容已在其他页面更新，请重新载入后再保存".into(),
             )
         } else {
             Self(502, "host_callback", "宿主操作未完成".into())
@@ -148,7 +152,7 @@ async fn dispatch(call: TypedCall<ManagementRequest>) -> Result<Value, ApiError>
                 &ModelListRequest {
                     client_key_id: input.client_key_id,
                     protocol: "openai".into(),
-                    client_version: "conversation-lab/0.1.0".into(),
+                    client_version: concat!("conversation-lab/", env!("CARGO_PKG_VERSION")).into(),
                 },
             )
             .await?;
@@ -199,6 +203,59 @@ async fn dispatch(call: TypedCall<ManagementRequest>) -> Result<Value, ApiError>
                 &StatePutRequest {
                     namespace: NAMESPACE.into(),
                     key: KEY.into(),
+                    value: encode(input.value)?,
+                    expected_version: input.expected_version,
+                },
+            )
+            .await?;
+            encode(result)
+        }
+        ("GET", "api/preferences") => {
+            if !call.payload.is_empty() {
+                return Err(ApiError::invalid("GET 请求不能包含正文"));
+            }
+            let result: StateGetResult = host_call(
+                &call.host,
+                "host.state.get",
+                &StateGetRequest {
+                    namespace: PREFERENCES_NAMESPACE.into(),
+                    key: PREFERENCES_KEY.into(),
+                },
+            )
+            .await?;
+            match result.record {
+                None => Ok(json!({ "version": null, "value": null })),
+                Some(record) => {
+                    let value: Preferences =
+                        serde_json::from_value(record.value).map_err(|_| {
+                            ApiError(500, "invalid_state", "已保存的默认设置格式无效".into())
+                        })?;
+                    if record.schema_version != 1 || value.validate().is_err() {
+                        return Err(ApiError(
+                            500,
+                            "invalid_state",
+                            "已保存的默认设置格式无效".into(),
+                        ));
+                    }
+                    Ok(json!({ "version": record.version, "value": value }))
+                }
+            }
+        }
+        ("POST", "api/preferences") => {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase")]
+            struct Input {
+                expected_version: Option<u64>,
+                value: Preferences,
+            }
+            let input: Input = decode(&call)?;
+            input.value.validate().map_err(ApiError::invalid)?;
+            let result: StatePutResult = host_call(
+                &call.host,
+                "host.state.put",
+                &StatePutRequest {
+                    namespace: PREFERENCES_NAMESPACE.into(),
+                    key: PREFERENCES_KEY.into(),
                     value: encode(input.value)?,
                     expected_version: input.expected_version,
                 },

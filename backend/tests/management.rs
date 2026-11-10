@@ -64,24 +64,29 @@ async fn save_and_load_presets_preserves_templates_and_version() {
 #[tokio::test]
 async fn save_reports_conflict_without_retrying() {
     let mut peer = Peer::start().await;
-    let mut calls = 0;
-    let (status, value) = peer
-        .api(
-            "POST",
-            "api/presets",
-            Some(json!({ "expectedVersion": 4, "value": preset() })),
-            |method, params| {
-                calls += 1;
-                assert_eq!(method, "host.state.put");
-                assert_eq!(params["expected_version"], 4);
-                Err(PluginFault::new(ErrorCode::Conflict, "conflict"))
-            },
-        )
-        .await;
-    assert_eq!(
-        (status, value["error"]["code"].as_str(), calls),
-        (409, Some("conflict"), 1)
-    );
+    for (path, data) in [
+        ("api/presets", preset()),
+        ("api/preferences", crate::preferences::defaults()),
+    ] {
+        let mut calls = 0;
+        let (status, value) = peer
+            .api(
+                "POST",
+                path,
+                Some(json!({ "expectedVersion": 4, "value": data })),
+                |method, params| {
+                    calls += 1;
+                    assert_eq!(method, "host.state.put");
+                    assert_eq!(params["expected_version"], 4);
+                    Err(PluginFault::new(ErrorCode::Conflict, "conflict"))
+                },
+            )
+            .await;
+        assert_eq!(
+            (status, value["error"]["code"].as_str(), calls),
+            (409, Some("conflict"), 1)
+        );
+    }
 }
 
 #[tokio::test]

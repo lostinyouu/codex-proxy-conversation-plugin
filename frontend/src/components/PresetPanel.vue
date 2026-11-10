@@ -6,8 +6,8 @@ import { getPresets, savePresets } from '../api/modules/lab'
 import { defaultPresets, randomId, renderMessages } from '../utils/presets'
 import MessageEditor from './MessageEditor.vue'
 
-const props = defineProps<{ running: boolean, canSend: boolean }>()
-const emit = defineEmits<{ send: [messages: ChatMessage[]], stop: [] }>()
+const props = defineProps<{ running: boolean, canSend: boolean, hasConversation: boolean }>()
+const emit = defineEmits<{ send: [messages: ChatMessage[]] }>()
 const entries = shallowRef<Preset[]>([])
 const draft = ref<Preset>(structuredClone(defaultPresets[0]!))
 const selectedId = shallowRef('')
@@ -189,11 +189,8 @@ onMounted(load)
     </p>
     <div class="flex flex-wrap items-center justify-between gap-2">
       <span class="text-z-xs text-z-text-tertiary">发送将使用所选 Key 的额度</span>
-      <ZButton v-if="running" @click="emit('stop')">
-        停止生成
-      </ZButton>
-      <ZButton v-else variant="solid" :disabled="disabled || !canSend || !valid || !payload" @click="send">
-        发送
+      <ZButton variant="solid" :loading="running" :disabled="disabled || !canSend || !valid || !payload" @click="send">
+        {{ hasConversation ? '新对话并发送' : '发送' }}
       </ZButton>
     </div>
   </section>
