@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+plugin_target="${1:-$(rustc -vV | sed -n 's/^host: //p')}"
+plugin_cli="${PLUGIN_CLI:-$plugin_root/.tools/bin/cpr-plugin}"
+
+if [[ ! -x "$plugin_cli" ]]; then
+  echo "请设置 PLUGIN_CLI，或按 README 安装打包工具" >&2
+  exit 1
+fi
+
+pnpm --dir "$plugin_root/frontend" install --frozen-lockfile
+pnpm --dir "$plugin_root/frontend" build
+cargo build --manifest-path "$plugin_root/backend/Cargo.toml" --release --locked --target "$plugin_target"
+"$plugin_cli" package \
+  --manifest "$plugin_root/plugin.json" \
+  --binary "$plugin_root/backend/target/$plugin_target/release/conversation-lab" \
+  --target "$plugin_target" \
+  --resource-map web=frontend/dist \
+  --output-dir "$plugin_root/dist"

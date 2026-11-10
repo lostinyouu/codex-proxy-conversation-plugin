@@ -1,0 +1,12 @@
+对话实验室
+
+Responses 读取及工程接入参考 Codex Proxy Plugins 的插件工作台
+https://github.com/zyycn/codex-proxy-plugins/tree/b02d267a19fd39bd004f408a685c4db51b555c99/examples/workbench
+
+界面使用 Codex Proxy UI
+https://github.com/zyycn/codex-proxy-ui/tree/d6100447010715c1203e67a4195fc6d875ff6249
+
+插件依赖 Gateway Plugin SDK
+https://github.com/zyycn/codex-proxy-rs/tree/8c8618aa0f841638262262e3338c115bc075f125/backend/crates/gateway-plugin/sdk
+
+上述项目采用 Apache-2.0 许可，许可证副本见 LICENSE

@@ -1,0 +1,7 @@
+minimumReleaseAgeExcludePrune: true
+trustPolicy: no-downgrade
+autoInstallPeers: false
+shellEmulator: true
+# 只允许锁定版本的共用 UI 库生成包内产物
+allowBuilds:
+  '@codex-proxy/ui@https://codeload.github.com/zyycn/codex-proxy-ui/tar.gz/d6100447010715c1203e67a4195fc6d875ff6249': true
