@@ -62,7 +62,7 @@ pub(crate) fn registration() -> ManagementRegistration {
         pages: vec![ManagementPage {
             id: "conversation-lab".into(),
             title: "对话实验室".into(),
-            description: Some("选择模型，发送固定或随机对话并查看回复".into()),
+            description: Some("切换连续对话与预设管理，保存默认模型和推理强度".into()),
             entry: "web/index.html".into(),
             icon: None,
         }],

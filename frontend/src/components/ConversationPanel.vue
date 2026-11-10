@@ -1,20 +1,23 @@
 <script setup lang="ts">
 import type { ChatMessage, GenerationFacts } from '../types'
 import { ZButton, ZTextarea } from '@codex-proxy/ui'
+import { computed } from 'vue'
+import { messageRoleLabels } from '../utils/conversation'
 
-defineProps<{
+const props = defineProps<{
   messages: ChatMessage[]
   running: boolean
   status: string
   error: string
   facts: GenerationFacts | null
-  canContinue: boolean
+  canCompose: boolean
   hasConversation: boolean
+  hasPreset: boolean
   identityChanged: boolean
 }>()
 const emit = defineEmits<{ send: [], stop: [], reset: [] }>()
 const draft = defineModel<string>({ required: true })
-const roles = { system: '系统', user: '用户', assistant: '助手' }
+const canSubmit = computed(() => props.canCompose && Boolean(draft.value.trim() || (!props.hasConversation && props.hasPreset)))
 </script>
 
 <template>
@@ -25,16 +28,16 @@ const roles = { system: '系统', user: '用户', assistant: '助手' }
       </h2>
       <div class="flex items-center gap-2">
         <span role="status" class="text-z-xs text-z-text-secondary">{{ status }}</span>
-        <ZButton variant="text" size="small" :disabled="running || !messages.length" @click="emit('reset')">
+        <ZButton variant="text" size="small" :disabled="running || (!messages.length && !hasPreset && !draft.trim())" @click="emit('reset')">
           新建对话
         </ZButton>
       </div>
     </div>
-    <p v-if="!messages.length" class="m-0 min-h-24 text-z-sm text-z-text-tertiary">
-      先从左侧发送预设，再在这里继续对话
+    <p v-if="!messages.length && !hasPreset" class="m-0 min-h-24 text-z-sm text-z-text-tertiary">
+      输入消息开始对话，也可在预设管理中载入模板
     </p>
     <div v-for="(message, index) in messages" :key="index" class="grid min-w-0 gap-1.5 rounded-z bg-z-bg-container p-3">
-      <span class="text-z-xs font-emphasis text-z-text-secondary">{{ roles[message.role] }}</span>
+      <span class="text-z-xs font-emphasis text-z-text-secondary">{{ messageRoleLabels[message.role] }}</span>
       <pre class="m-0 whitespace-pre-wrap break-words font-sans text-z-sm leading-relaxed">{{ message.content }}</pre>
     </div>
     <p v-if="error" role="alert" class="m-0 whitespace-pre-wrap break-words text-z-sm text-z-error-text">
@@ -50,12 +53,13 @@ const roles = { system: '系统', user: '用户', assistant: '助手' }
       Key 或模型已更改，请开始新对话
     </p>
     <div class="grid gap-2">
-      <ZTextarea v-model="draft" :rows="3" :disabled="running || !canContinue" aria-label="继续对话" :placeholder="hasConversation ? '继续提问，Ctrl + Enter 发送' : '发送预设后可继续提问'" @keydown.ctrl.enter.prevent="canContinue && !running && draft.trim() && emit('send')" />
-      <div class="flex justify-end">
+      <ZTextarea v-model="draft" :rows="3" :disabled="running || !canCompose" aria-label="对话消息" :placeholder="hasConversation ? '继续提问，Ctrl + Enter 发送' : hasPreset ? '补充消息（可选），Ctrl + Enter 发送' : '输入消息，Ctrl + Enter 发送'" @keydown.ctrl.enter.prevent="canSubmit && !running && emit('send')" />
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <span class="text-z-xs text-z-text-tertiary">发送将使用所选 Key 的额度</span>
         <ZButton v-if="running" @click="emit('stop')">
           停止生成
         </ZButton>
-        <ZButton v-else variant="solid" :disabled="!canContinue || !draft.trim()" @click="emit('send')">
+        <ZButton v-else type="primary" variant="solid" :disabled="!canSubmit" @click="emit('send')">
           发送消息
         </ZButton>
       </div>

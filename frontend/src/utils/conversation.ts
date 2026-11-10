@@ -2,6 +2,8 @@ import type { ChatMessage } from '../types'
 
 export type ConversationItem = Record<string, unknown>
 
+export const messageRoleLabels = { system: '系统', user: '用户', assistant: '助手' } as const
+
 // 原始输出项留给协议续聊，界面只投影可显示的消息
 export function conversationMessages(items: ConversationItem[]): ChatMessage[] {
   const result: ChatMessage[] = []

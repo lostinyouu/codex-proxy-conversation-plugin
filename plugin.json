@@ -3,8 +3,8 @@
   "name": "conversation-lab",
   "displayName": "对话实验室",
   "publisher": "lostinyouu",
-  "version": "0.2.0",
-  "description": "保存默认模型和推理强度，使用固定或随机预设开始连续对话",
+  "version": "0.3.0",
+  "description": "切换连续对话与预设管理，保存默认 Key、模型和推理强度",
   "license": "Apache-2.0",
   "engines": {
     "codex-proxy-rs": ">=3.44.0, <4.0.0"

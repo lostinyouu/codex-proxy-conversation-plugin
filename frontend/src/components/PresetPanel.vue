@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import type { ChatMessage, Preset } from '../types'
+import type { ChatMessage, PreparedPreset, Preset } from '../types'
 import { ZButton, ZInput, ZSelect } from '@codex-proxy/ui'
 import { computed, onMounted, onScopeDispose, ref, shallowRef, toRaw, watch } from 'vue'
 import { getPresets, savePresets } from '../api/modules/lab'
 import { defaultPresets, randomId, renderMessages } from '../utils/presets'
 import MessageEditor from './MessageEditor.vue'
+import MessagePreview from './MessagePreview.vue'
 
-const props = defineProps<{ running: boolean, canSend: boolean, hasConversation: boolean }>()
-const emit = defineEmits<{ send: [messages: ChatMessage[]] }>()
+const props = defineProps<{ conversationRunning: boolean }>()
+const emit = defineEmits<{ apply: [preset: PreparedPreset] }>()
 const entries = shallowRef<Preset[]>([])
 const draft = ref<Preset>(structuredClone(defaultPresets[0]!))
 const selectedId = shallowRef('')
@@ -25,7 +26,7 @@ onScopeDispose(() => {
 
 const options = computed(() => entries.value.map(p => ({ label: p.name, value: p.id })))
 const modes = [{ label: '固定对话', value: 'fixed' }, { label: '随机模板', value: 'random' }]
-const disabled = computed(() => props.running || saving.value || loading.value || !loaded.value)
+const disabled = computed(() => saving.value || loading.value || !loaded.value)
 const valid = computed(() => draft.value.name.trim() && draft.value.messages.length && draft.value.messages.every(m => m.content.trim()))
 const payload = computed(() => draft.value.mode === 'fixed' ? draft.value.messages : rendered.value)
 const saved = computed(() => entries.value.some(p => p.id === draft.value.id))
@@ -47,7 +48,7 @@ function newPreset() {
 }
 
 async function load() {
-  if (loading.value || saving.value || props.running)
+  if (loading.value || saving.value)
     return
   loading.value = true
   error.value = ''
@@ -123,16 +124,16 @@ function preview() {
   }
 }
 
-function send() {
-  if (disabled.value || !props.canSend || !valid.value || !payload.value)
+function apply() {
+  if (disabled.value || props.conversationRunning || !valid.value || !payload.value)
     return
-  emit('send', structuredClone(toRaw(payload.value)))
+  emit('apply', { name: draft.value.name, messages: structuredClone(toRaw(payload.value)) })
 }
 onMounted(load)
 </script>
 
 <template>
-  <section class="grid min-w-0 content-start gap-4 p-4" aria-label="对话预设" :aria-busy="loading">
+  <section class="grid min-w-0 content-start gap-4 p-4" aria-label="预设管理" :aria-busy="loading">
     <div class="flex flex-wrap items-end gap-2">
       <div class="grid min-w-40 flex-1 gap-1.5">
         <span class="text-z-xs text-z-text-secondary">预设</span>
@@ -141,7 +142,7 @@ onMounted(load)
       <ZButton :disabled="disabled" @click="newPreset">
         新建
       </ZButton>
-      <ZButton :disabled="running || saving" :loading="loading" @click="load">
+      <ZButton :disabled="saving" :loading="loading" @click="load">
         重新载入
       </ZButton>
     </div>
@@ -174,12 +175,7 @@ onMounted(load)
       <h3 class="m-0 text-z-sm font-emphasis">
         实际发送内容
       </h3>
-      <div v-for="(message, index) in rendered" :key="index" class="min-w-0">
-        <span class="text-z-xs text-z-text-secondary">{{ message.role }}</span>
-        <p class="m-0 whitespace-pre-wrap break-words text-z-sm">
-          {{ message.content }}
-        </p>
-      </div>
+      <MessagePreview :messages="rendered" />
     </div>
     <p v-if="error" role="alert" class="m-0 text-z-sm text-z-error-text">
       {{ error }}
@@ -188,9 +184,9 @@ onMounted(load)
       {{ notice }}
     </p>
     <div class="flex flex-wrap items-center justify-between gap-2">
-      <span class="text-z-xs text-z-text-tertiary">发送将使用所选 Key 的额度</span>
-      <ZButton variant="solid" :loading="running" :disabled="disabled || !canSend || !valid || !payload" @click="send">
-        {{ hasConversation ? '新对话并发送' : '发送' }}
+      <span class="text-z-xs text-z-text-tertiary">{{ conversationRunning ? '对话生成中，完成后可载入预设' : '载入后在对话页确认发送' }}</span>
+      <ZButton type="primary" variant="solid" :disabled="disabled || conversationRunning || !valid || !payload" @click="apply">
+        用于新对话
       </ZButton>
     </div>
   </section>

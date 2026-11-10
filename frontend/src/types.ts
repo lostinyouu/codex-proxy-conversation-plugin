@@ -3,6 +3,11 @@ export interface ChatMessage {
   content: string
 }
 
+export interface PreparedPreset {
+  name: string
+  messages: ChatMessage[]
+}
+
 export interface Preset {
   id: string
   name: string
